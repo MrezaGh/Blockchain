@@ -23,21 +23,16 @@ func main() {
 	}
 
 	// Create some transactions
-	tx1 := blockchain.Transaction{
-		From:   wallet1.Address,
-		To:     wallet2.Address,
-		Amount: 10.0,
-	}
-
-	tx2 := blockchain.Transaction{
-		From:   wallet2.Address,
-		To:     wallet1.Address,
-		Amount: 5.0,
-	}
+	tx1 := blockchain.NewTransaction(wallet1.Address, wallet2.Address, 10.0, 0.1)
+	tx2 := blockchain.NewTransaction(wallet2.Address, wallet1.Address, 5.0, 0.1)
 
 	// Add transactions to the blockchain
-	bc.AddTransaction(tx1)
-	bc.AddTransaction(tx2)
+	if err := bc.AddTransaction(tx1); err != nil {
+		log.Printf("Error adding transaction 1: %v", err)
+	}
+	if err := bc.AddTransaction(tx2); err != nil {
+		log.Printf("Error adding transaction 2: %v", err)
+	}
 
 	// Mine pending transactions
 	fmt.Println("Mining block 1...")

@@ -4,7 +4,7 @@ package blockchain
 type Blockchain struct {
 	Chain            []*Block
 	Difficulty       int
-	PendingTx        []Transaction
+	TransactionPool  *TransactionPool
 	MiningReward     float64
 	MiningRewardAddr string
 }
@@ -14,7 +14,7 @@ func NewBlockchain(difficulty int, miningRewardAddr string) *Blockchain {
 	bc := &Blockchain{
 		Chain:            []*Block{createGenesisBlock()},
 		Difficulty:       difficulty,
-		PendingTx:        []Transaction{},
+		TransactionPool:  NewTransactionPool(1000), // Max 1000 pending transactions
 		MiningReward:     10.0,
 		MiningRewardAddr: miningRewardAddr,
 	}
@@ -34,17 +34,22 @@ func (bc *Blockchain) GetLatestBlock() *Block {
 // MinePendingTransactions mines pending transactions
 func (bc *Blockchain) MinePendingTransactions() {
 	// Create mining reward transaction
-	rewardTx := Transaction{
-		From:   "network",
-		To:     bc.MiningRewardAddr,
-		Amount: bc.MiningReward,
+	rewardTx := NewTransaction("network", bc.MiningRewardAddr, bc.MiningReward, 0)
+	bc.TransactionPool.AddTransaction(rewardTx)
+
+	// Get transactions from pool
+	pendingTxs := bc.TransactionPool.GetTransactions()
+
+	// Convert []*Transaction to []Transaction
+	transactions := make([]Transaction, len(pendingTxs))
+	for i, tx := range pendingTxs {
+		transactions[i] = *tx
 	}
-	bc.PendingTx = append(bc.PendingTx, rewardTx)
 
 	// Create new block
 	block := NewBlock(
 		int64(len(bc.Chain)),
-		bc.PendingTx,
+		transactions,
 		bc.GetLatestBlock().Hash,
 	)
 
@@ -54,13 +59,13 @@ func (bc *Blockchain) MinePendingTransactions() {
 	// Add block to chain
 	bc.Chain = append(bc.Chain, block)
 
-	// Reset pending transactions
-	bc.PendingTx = []Transaction{}
+	// Remove mined transactions from pool
+	bc.TransactionPool.RemoveTransactions(pendingTxs)
 }
 
-// AddTransaction adds a new transaction to pending transactions
-func (bc *Blockchain) AddTransaction(tx Transaction) {
-	bc.PendingTx = append(bc.PendingTx, tx)
+// AddTransaction adds a new transaction to the transaction pool
+func (bc *Blockchain) AddTransaction(tx *Transaction) error {
+	return bc.TransactionPool.AddTransaction(tx)
 }
 
 // GetBalance calculates the balance of an address
