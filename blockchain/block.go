@@ -15,6 +15,8 @@ type Block struct {
 	PrevHash     string        `json:"prevHash"`
 	Hash         string        `json:"hash"`
 	Nonce        int64         `json:"nonce"`
+	MerkleRoot   string        `json:"merkleRoot"`
+	MerkleTree   *MerkleTree   `json:"-"`
 }
 
 // Transaction represents a transaction in the blockchain
@@ -26,15 +28,23 @@ type Transaction struct {
 	Hash   string  `json:"hash"`
 }
 
-// NewBlock creates a new block
+// NewBlock creates a new block with Merkle tree integration
 func NewBlock(index int64, transactions []Transaction, prevHash string) *Block {
+	merkleTree := NewMerkleTree(transactions)
+	merkleRoot := ""
+	if merkleTree.Root != nil {
+		merkleRoot = merkleTree.GetMerkleRoot()
+	}
+
 	return &Block{
 		Index:        index,
 		Timestamp:    time.Now().Unix(),
 		Transactions: transactions,
 		PrevHash:     prevHash,
 		Nonce:        0,
-		Hash:         "", // Hash will be calculated during mining
+		Hash:         "",
+		MerkleRoot:   merkleRoot,
+		MerkleTree:   merkleTree,
 	}
 }
 
@@ -50,20 +60,20 @@ func NewTransaction(from, to string, amount, fee float64) *Transaction {
 	return tx
 }
 
-// calculateHash calculates the hash of the block
+// calculateHash calculates the hash of the block (now includes Merkle root)
 func (b *Block) calculateHash() string {
 	data := struct {
-		Index        int64
-		Timestamp    int64
-		Transactions []Transaction
-		PrevHash     string
-		Nonce        int64
+		Index      int64
+		Timestamp  int64
+		MerkleRoot string
+		PrevHash   string
+		Nonce      int64
 	}{
-		Index:        b.Index,
-		Timestamp:    b.Timestamp,
-		Transactions: b.Transactions,
-		PrevHash:     b.PrevHash,
-		Nonce:        b.Nonce,
+		Index:      b.Index,
+		Timestamp:  b.Timestamp,
+		MerkleRoot: b.MerkleRoot,
+		PrevHash:   b.PrevHash,
+		Nonce:      b.Nonce,
 	}
 	blockBytes, err := json.Marshal(data)
 	if err != nil {
@@ -109,4 +119,34 @@ func (b *Block) MineBlock(difficulty int) {
 			break
 		}
 	}
+}
+
+// ValidateTransactions validates all transactions in the block using Merkle tree
+func (b *Block) ValidateTransactions() bool {
+	if b.MerkleTree == nil {
+		b.MerkleTree = NewMerkleTree(b.Transactions)
+		if b.MerkleTree.Root != nil {
+			b.MerkleRoot = b.MerkleTree.GetMerkleRoot()
+		}
+	}
+
+	calculatedRoot := ""
+	if b.MerkleTree.Root != nil {
+		calculatedRoot = b.MerkleTree.GetMerkleRoot()
+	}
+
+	return b.MerkleRoot == calculatedRoot
+}
+
+// GenerateTransactionProof generates a Merkle proof for a specific transaction
+func (b *Block) GenerateTransactionProof(txHash string) (*MerkleProof, error) {
+	if b.MerkleTree == nil {
+		b.MerkleTree = NewMerkleTree(b.Transactions)
+	}
+	return b.MerkleTree.GenerateProof(txHash)
+}
+
+// VerifyTransactionProof verifies that a transaction exists in this block
+func (b *Block) VerifyTransactionProof(proof *MerkleProof) bool {
+	return VerifyProof(proof, b.MerkleRoot)
 }
