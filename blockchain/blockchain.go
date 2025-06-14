@@ -1,5 +1,9 @@
 package blockchain
 
+import (
+	"errors"
+)
+
 // Blockchain represents the blockchain
 type Blockchain struct {
 	Chain            []*Block
@@ -86,7 +90,7 @@ func (bc *Blockchain) GetBalance(address string) float64 {
 	return balance
 }
 
-// IsChainValid verifies if the blockchain is valid
+// IsChainValid verifies if the blockchain is valid (now includes Merkle tree validation)
 func (bc *Blockchain) IsChainValid() bool {
 	for i := 1; i < len(bc.Chain); i++ {
 		currentBlock := bc.Chain[i]
@@ -101,7 +105,32 @@ func (bc *Blockchain) IsChainValid() bool {
 		if currentBlock.PrevHash != previousBlock.Hash {
 			return false
 		}
+
+		// Verify Merkle tree integrity
+		if !currentBlock.ValidateTransactions() {
+			return false
+		}
 	}
 
 	return true
+}
+
+// GetTransactionProof generates a Merkle proof for a transaction in a specific block
+func (bc *Blockchain) GetTransactionProof(blockIndex int, txHash string) (*MerkleProof, error) {
+	if blockIndex < 0 || blockIndex >= len(bc.Chain) {
+		return nil, errors.New("invalid block index")
+	}
+
+	block := bc.Chain[blockIndex]
+	return block.GenerateTransactionProof(txHash)
+}
+
+// VerifyTransactionInBlock verifies that a transaction exists in a specific block
+func (bc *Blockchain) VerifyTransactionInBlock(blockIndex int, proof *MerkleProof) bool {
+	if blockIndex < 0 || blockIndex >= len(bc.Chain) {
+		return false
+	}
+
+	block := bc.Chain[blockIndex]
+	return block.VerifyTransactionProof(proof)
 }
